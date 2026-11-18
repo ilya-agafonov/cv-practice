@@ -55,16 +55,20 @@ python main.py -f <фильтр> -i <входное_изображение> -o <
 Изменение разрешения:
 
 ```bash
-python main.py -f resize -i images/img1.jpg -o output/resized.jpg --width 600 --height 400
+python main.py -f resize -i images/img1.jpg -o output/resized.jpg --width 640 --height 360
 ```
 
-Перевод в оттенки серого:
+```bash
+python main.py -f resize -i images/img1.jpg -o output/resized.jpg --width 2560 --height 1440
+```
+
+Оттенки серого:
 
 ```bash
 python main.py -f grayscale -i images/img1.jpg -o output/gray.jpg
 ```
 
-Эффект антиквариата:
+Антиквариат:
 
 ```bash
 python main.py -f antique -i images/img1.jpg -o output/antique.jpg

@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 
-# Приводит серый/1-канальный/BGRA вход к BGR
-def _to_bgr(image: np.ndarray) -> np.ndarray:
+# Приводит серый/1-канальный/BGRA к BGR
+def _to_bgr(image):
     if image.ndim == 2:
         return np.stack([image, image, image], axis=-1)
     if image.shape[2] == 1:
@@ -14,7 +14,7 @@ def _to_bgr(image: np.ndarray) -> np.ndarray:
 
 
 # Свёртка 3x3, сдвигаем изображение и умножаем на элементы ядра
-def _convolve2d(channel: np.ndarray, kernel: np.ndarray) -> np.ndarray:
+def _convolve2d(channel, kernel):
     h, w = channel.shape
     padded = np.pad(channel, 1, mode="edge")
     out = np.zeros((h, w), dtype=np.float32)
@@ -27,13 +27,12 @@ def _convolve2d(channel: np.ndarray, kernel: np.ndarray) -> np.ndarray:
 
 
 # Виньетка
-def _radial_factor(h: int, w: int, vignette: float, center_gain: float = 0.0) -> np.ndarray:
+def _radial_factor(h: int, w: int, vignette: float, center_gain: float = 0.0):
     cy, cx = (h - 1) / 2.0, (w - 1) / 2.0
     y, x = np.ogrid[:h, :w]
 
     nx = (x - cx) / max(cx, 1e-6)
     ny = (y - cy) / max(cy, 1e-6)
-    # r = 0 в центре, 1 в углах
     r = np.clip(np.sqrt(nx * nx + ny * ny) / np.sqrt(2.0), 0.0, 1.0)
 
     return 1.0 + center_gain * (1.0 - r) - vignette * (r ** 2)
@@ -42,7 +41,7 @@ def _radial_factor(h: int, w: int, vignette: float, center_gain: float = 0.0) ->
 # Абстрактный фильтр
 class ImageFilter(ABC):
     @abstractmethod
-    def apply_filter(self, image: np.ndarray) -> np.ndarray:
+    def apply_filter(self, image):
         pass
 
     @staticmethod
@@ -83,7 +82,7 @@ class ResizeFilter(ImageFilter):
         self.target_width = target_width
         self.target_height = target_height
 
-    def apply_filter(self, image: np.ndarray) -> np.ndarray:
+    def apply_filter(self, image):
         orig_height, orig_width = image.shape[:2]
 
         row_indices = (np.arange(self.target_height) * (orig_height / self.target_height)).astype(int)
@@ -97,7 +96,7 @@ class ResizeFilter(ImageFilter):
 
 # Оттенки серого: Y = 0.299*R + 0.587*G + 0.114*B
 class BGR2GrayScale(ImageFilter):
-    def apply_filter(self, image: np.ndarray) -> np.ndarray:
+    def apply_filter(self, image):
         if image.ndim == 2:
             return image.copy()
 
@@ -111,11 +110,11 @@ class BGR2GrayScale(ImageFilter):
 
 # Антиквариат: сепия + виньетка
 class AntiqueFilter(ImageFilter):
-    def __init__(self, vignette: float = 0.35, center_gain: float = 0.08):
+    def __init__(self, vignette: float = 0.75, center_gain: float = 0.5):
         self.vignette = float(np.clip(vignette, 0.0, 0.9))
         self.center_gain = float(np.clip(center_gain, 0.0, 0.5))
 
-    def apply_filter(self, image: np.ndarray) -> np.ndarray:
+    def apply_filter(self, image):
         img = _to_bgr(image)
         b = img[:, :, 0].astype(np.float32)
         g = img[:, :, 1].astype(np.float32)
@@ -137,7 +136,7 @@ class FadeFilter(ImageFilter):
     def __init__(self, alpha: float = 0.6):
         self.alpha = float(np.clip(alpha, 0.0, 1.0))
 
-    def apply_filter(self, image: np.ndarray) -> np.ndarray:
+    def apply_filter(self, image):
         img_float = image.astype(np.float32)
         faded = img_float * self.alpha + (1.0 - self.alpha) * 255.0
         return np.clip(faded, 0, 255).astype(np.uint8)
@@ -147,7 +146,7 @@ class FilmFilter(ImageFilter):
     def __init__(self, gain: float = 4.0):
         self.gain = float(gain)
 
-    def apply_filter(self, image: np.ndarray) -> np.ndarray:
+    def apply_filter(self, image):
         img = _to_bgr(image)
         b = img[:, :, 0].astype(np.float32)
         g = img[:, :, 1].astype(np.float32)
@@ -169,7 +168,7 @@ class MatteFilter(ImageFilter):
         self.radius = float(np.clip(radius, 0.05, 1.0))
         self.feather = float(np.clip(feather, 0.01, 1.0))
 
-    def apply_filter(self, image: np.ndarray) -> np.ndarray:
+    def apply_filter(self, image):
         h, w = image.shape[:2]
         cy, cx = (h - 1) / 2.0, (w - 1) / 2.0
 
@@ -187,14 +186,12 @@ class MatteFilter(ImageFilter):
         result = image.astype(np.float32) * (1.0 - mask) + 255.0 * mask
         return np.clip(result, 0, 255).astype(np.uint8)
 
-
-# Состаривание
 class ScratchesNoiseFilter(ImageFilter):
     def __init__(self, noise_ratio: float = 0.01, num_lines: int = 6):
         self.noise_ratio = float(noise_ratio)
         self.num_lines = int(num_lines)
 
-    def apply_filter(self, image: np.ndarray) -> np.ndarray:
+    def apply_filter(self, image):
         res = image.astype(np.float32)
         h, w = res.shape[:2]
 
@@ -240,10 +237,10 @@ class ScratchesNoiseFilter(ImageFilter):
 
 # Неон
 class NeonFilter(ImageFilter):
-    def __init__(self, gain: float = 1.5):
+    def __init__(self, gain: float = 3.0):
         self.gain = float(gain)
 
-    def apply_filter(self, image: np.ndarray) -> np.ndarray:
+    def apply_filter(self, image):
         base = _to_bgr(image).astype(np.float32)
         b = base[:, :, 0]
         g = base[:, :, 1]
@@ -258,15 +255,17 @@ class NeonFilter(ImageFilter):
         gy = _convolve2d(gray, kernel_y)
         # |grad| = sqrt(Gx^2 + Gy^2)
         magnitude = np.sqrt(gx ** 2 + gy ** 2)
-        edges = (np.clip(magnitude / 4.0, 0, 255) / 255.0) ** 1.6
+        edges = (np.clip(magnitude / 4.0, 0, 255) / 255.0) ** 0.8
 
         box = np.full((3, 3), 1.0 / 9.0, dtype=np.float32)
         edges_glow = _convolve2d(edges, box)
         glow_map = np.clip(edges + 0.7 * edges_glow, 0.0, 1.0)
 
+        
         neon_bgr = np.array([1.0, 0.8, 0.2], dtype=np.float32)
         glow = glow_map[:, :, None] * neon_bgr * (255.0 * self.gain)
 
+        
         #свечение на исходное изображение
-        result = base + glow
+        result = base * 0.15 + glow
         return np.clip(result, 0, 255).astype(np.uint8)
